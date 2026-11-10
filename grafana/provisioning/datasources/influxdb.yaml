@@ -1,0 +1,22 @@
+apiVersion: 1
+
+# Источник данных InfluxDB 2.x (язык запросов Flux).
+# Значения ${...} Grafana подставляет из переменных окружения:
+#   INFLUX_URL   — http://127.0.0.1:8086 (Windows) или http://influxdb:8086 (Docker)
+#   INFLUX_TOKEN — API-токен с правами чтения bucket Metrix
+datasources:
+  - name: InfluxDB
+    uid: influxdb-pr9
+    type: influxdb
+    access: proxy
+    url: ${INFLUX_URL}
+    isDefault: true
+    editable: true
+    jsonData:
+      version: Flux
+      organization: MPT
+      defaultBucket: Metrix
+      timeInterval: 5s
+      tlsSkipVerify: true
+    secureJsonData:
+      token: ${INFLUX_TOKEN}

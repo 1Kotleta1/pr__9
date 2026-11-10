@@ -1,0 +1,1855 @@
+{
+  "uid": "pr9-device",
+  "title": "ПР9 — Мониторинг состояния устройства",
+  "description": "Системные метрики собственного компьютера: Telegraf → InfluxDB → Grafana",
+  "tags": [
+    "pr9",
+    "telegraf",
+    "influxdb",
+    "system"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m"
+    ]
+  },
+  "schemaVersion": 41,
+  "version": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "host",
+        "label": "Хост",
+        "type": "query",
+        "datasource": {
+          "type": "influxdb",
+          "uid": "influxdb-pr9"
+        },
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"Metrix\", tag: \"host\", predicate: (r) => r._measurement == \"system\", start: -7d)",
+        "definition": "host tag values",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "current": {},
+        "options": [],
+        "sort": 1,
+        "hide": 0
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "panels": [
+    {
+      "type": "row",
+      "title": "Устройство",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Имя хоста",
+      "description": "Имя компьютера, с которого Telegraf собирает метрики (тег host). Единица измерения: текст.",
+      "id": 2,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"system\" and r._field == \"uptime\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()\n  |> map(fn: (r) => ({_time: r._time, \"Хост\": r.host}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^Хост$/"
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "table",
+      "title": "Сведения об устройстве",
+      "description": "Операционная система, её версия и сборка, часовой пояс, модель процессора, объём ОЗУ, производитель и время последней загрузки. Данные собирает плагин inputs.exec (скрипт device_info) раз в минуту.",
+      "id": 3,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 5,
+        "y": 1,
+        "w": 10,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "import \"dict\"\nnames = [\"os\": \"Операционная система\", \"os_version\": \"Версия / сборка\", \"kernel\": \"Ядро\",\n  \"arch\": \"Разрядность\", \"timezone\": \"Часовой пояс\", \"cpu_model\": \"Процессор\",\n  \"cpu_cores\": \"Ядер CPU\", \"cpu_threads\": \"Потоков CPU\", \"ram_total\": \"ОЗУ всего, ГБ\",\n  \"manufacturer\": \"Платформа\", \"last_boot\": \"Последняя загрузка\", \"user\": \"Пользователь\"]\norder = [\"os\": 1, \"os_version\": 2, \"kernel\": 3, \"arch\": 4, \"timezone\": 5, \"cpu_model\": 6,\n  \"cpu_cores\": 7, \"cpu_threads\": 8, \"ram_total\": 9, \"manufacturer\": 10, \"last_boot\": 11, \"user\": 12]\nfrom(bucket: \"Metrix\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"device_info\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()\n  |> map(fn: (r) => ({\n      n: dict.get(dict: order, key: r._field, default: 99),\n      \"Параметр\": dict.get(dict: names, key: r._field, default: r._field),\n      \"Значение\": if r._field == \"ram_total\" then string(v: float(v: int(v: float(v: r._value) / 107374182.4)) / 10.0) else string(v: r._value)}))\n  |> group()\n  |> sort(columns: [\"n\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Параметр"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 200
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "n": true
+            },
+            "indexByName": {
+              "Параметр": 0,
+              "Значение": 1
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Время работы",
+      "description": "Сколько времени прошло с момента последнего запуска компьютера. Плагин system, поле uptime. Единица: секунды (показано как дни/часы/минуты).",
+      "id": 4,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 1,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"system\" and r._field == \"uptime\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dtdurations",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Логических CPU",
+      "description": "Количество логических процессоров (потоков), которые видит ОС. Плагин system, поле n_cpus. Единица: штуки.",
+      "id": 5,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"system\" and r._field == \"n_cpus\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Процессов",
+      "description": "Число процессов, работающих в системе в данный момент. В Windows берётся из счётчика System\\Processes (плагин win_perf_counters), в Linux — из плагина processes. Единица: штуки.",
+      "id": 6,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"processes\" and r._field == \"total\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 400
+              },
+              {
+                "color": "red",
+                "value": 600
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Потоков (threads)",
+      "description": "Суммарное число потоков всех процессов. Счётчик System\\Threads. Единица: штуки.",
+      "id": 7,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 15,
+        "y": 5,
+        "w": 5,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"processes\" and r._field == \"total_threads\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "yellow"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Переключений/с",
+      "description": "Сколько раз в секунду процессор переключается между потоками. Windows — счётчик System\\Context Switches/sec, Linux — производная поля context_switches плагина kernel. Единица: переключений/с.",
+      "id": 8,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"processes\" and r._field == \"context_switches\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "row",
+      "title": "Процессор",
+      "id": 9,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "panels": []
+    },
+    {
+      "type": "gauge",
+      "title": "Загрузка CPU",
+      "description": "Общая загрузка центрального процессора (100 % минус простой). Плагин cpu, cpu-total, поле usage_active. Единица: проценты. Порог: выше 60 % — жёлтый, выше 80 % — красный (высокая нагрузка).",
+      "id": 10,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu\" and r.cpu == \"cpu-total\" and r._field == \"usage_active\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()\n  |> map(fn: (r) => ({_time: r._time, \"CPU\": r._value}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "orientation": "auto"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Загрузка CPU по времени",
+      "description": "Загрузка процессора во времени: user — программы пользователя, system — ядро ОС, active — всего. Плагин cpu. Единица: проценты. Красная пунктирная линия — порог высокой нагрузки 80 %.",
+      "id": 11,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu\" and r.cpu == \"cpu-total\")\n  |> filter(fn: (r) => r._field == \"usage_active\" or r._field == \"usage_user\" or r._field == \"usage_system\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "usage_active"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "active (всего)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "usage_user"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "user"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "usage_system"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "system"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Загрузка по ядрам",
+      "description": "Загрузка каждого логического процессора отдельно. Плагин cpu (percpu = true), поле usage_active. Единица: проценты. Пороги 60 % и 80 %.",
+      "id": 12,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 10,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cpu\" and r.cpu != \"cpu-total\" and r._field == \"usage_active\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, cpu: r.cpu}))\n  |> group(columns: [\"cpu\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "sizing": "auto"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Оперативная память",
+      "id": 13,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "panels": []
+    },
+    {
+      "type": "gauge",
+      "title": "Использование ОЗУ",
+      "description": "Доля занятой оперативной памяти. Плагин mem, поле used_percent. Единица: проценты. Порог: выше 75 % — жёлтый, выше 90 % — красный (памяти почти не осталось).",
+      "id": 14,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"mem\" and r._field == \"used_percent\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()\n  |> map(fn: (r) => ({_time: r._time, \"ОЗУ\": r._value}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 75
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "ОЗУ: занято и доступно",
+      "description": "Сколько оперативной памяти занято (used) и сколько ещё доступно программам (available). Плагин mem. Единица: байты (ГиБ).",
+      "id": 15,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 19,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"mem\" and (r._field == \"used\" or r._field == \"available\"))\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "decimals": 2,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 25,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsStyle": {
+              "mode": "off"
+            },
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "used"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Занято"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "available"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Доступно"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "gauge",
+      "title": "Файл подкачки",
+      "description": "Использование файла подкачки (swap / pagefile). Плагин swap, поле used_percent. Единица: проценты. Пороги 50 % и 80 %.",
+      "id": 16,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 19,
+        "w": 6,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"swap\" and r._field == \"used_percent\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()\n  |> map(fn: (r) => ({_time: r._time, \"Swap\": r._value}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "type": "row",
+      "title": "Диски",
+      "id": 17,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "panels": []
+    },
+    {
+      "type": "bargauge",
+      "title": "Занятое место на дисках",
+      "description": "Процент занятого места на каждом локальном диске. Плагин disk, поле used_percent. Единица: проценты. Пороги: 80 % — жёлтый, 90 % — красный.",
+      "id": 18,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 6,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "import \"strings\"\nfrom(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"disk\" and r._field == \"used_percent\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, path: strings.trimPrefix(v: r.path, prefix: \"\\\\\")}))\n  |> group(columns: [\"path\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byType",
+              "options": "number"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Диск ${__field.labels.path}"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "displayMode": "lcd",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "top",
+        "sizing": "manual",
+        "minVizHeight": 40,
+        "maxVizHeight": 60
+      }
+    },
+    {
+      "type": "table",
+      "title": "Свободное и занятое место",
+      "description": "Объём каждого диска: всего, занято и свободно. Плагин disk, поля total, used, free. Единица: байты (ГБ).",
+      "id": 19,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 28,
+        "w": 12,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "import \"strings\"\nfrom(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"disk\")\n  |> filter(fn: (r) => r._field == \"total\" or r._field == \"used\" or r._field == \"free\" or r._field == \"used_percent\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()\n  |> pivot(rowKey: [\"path\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({\"Диск\": strings.trimPrefix(v: r.path, prefix: \"\\\\\"), \"ФС\": r.fstype, \"Всего\": r.total, \"Занято\": r.used, \"Свободно\": r.free, \"Занято, %\": r.used_percent}))\n  |> group()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "decimals": 1,
+          "custom": {
+            "align": "center",
+            "minWidth": 70,
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Занято, %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Диск"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "string"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ФС"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "string"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "md",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "Диск": 0,
+              "ФС": 1,
+              "Всего": 2,
+              "Занято": 3,
+              "Свободно": 4,
+              "Занято, %": 5
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "gauge",
+      "title": "Загрузка дисковой подсистемы",
+      "description": "Доля времени, в течение которой диск был занят обработкой запросов чтения/записи. Windows: 100 % минус счётчик PhysicalDisk\\% Idle Time (_Total); Linux: производная diskio.io_time. Единица: проценты. Пороги 60 % и 90 %.",
+      "id": 20,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 28,
+        "w": 6,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "win = from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"disk_load\" and r._field == \"idle_percent\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> map(fn: (r) => ({_time: r._time, _value: if r._value > 100.0 then 0.0 else 100.0 - r._value}))\nlin = from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"diskio\" and r._field == \"io_time\" and r.platform == \"linux\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> derivative(unit: 1s, nonNegative: true)\n  |> group(columns: [\"_time\"])\n  |> max()\n  |> group()\n  |> map(fn: (r) => ({_time: r._time, _value: float(v: r._value) / 10.0}))\nunion(tables: [win, lin])\n  |> sort(columns: [\"_time\"])\n  |> last()\n  |> map(fn: (r) => ({_time: r._time, \"Диск\": r._value}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Дисковый ввод-вывод: чтение и запись",
+      "description": "Скорость чтения и записи данных на диски (сумма по всем дискам). Плагин diskio, производная полей read_bytes и write_bytes. Единица: байт/с.",
+      "id": 21,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"diskio\" and (r._field == \"read_bytes\" or r._field == \"write_bytes\"))\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> derivative(unit: 1s, nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "read_bytes"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Чтение"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "write_bytes"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Запись"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Дисковые операции (IOPS)",
+      "description": "Количество операций чтения и записи на диск в секунду. Плагин diskio, производная полей reads и writes. Единица: операций/с.",
+      "id": 22,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 35,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"diskio\" and (r._field == \"reads\" or r._field == \"writes\"))\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> derivative(unit: 1s, nonNegative: true)\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "iops",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reads"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Чтение"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "writes"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Запись"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Сеть",
+      "id": 23,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Скорость сети: приём и передача",
+      "description": "Скорость получения (приём) и отправки (передача) данных по всем сетевым интерфейсам. Плагин net, производная полей bytes_recv и bytes_sent, умноженная на 8. Единица: бит/с.",
+      "id": 24,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 16,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"net\" and (r._field == \"bytes_recv\" or r._field == \"bytes_sent\"))\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> filter(fn: (r) => r.interface !~ /(?i)loopback|isatap|teredo|tun|^lo$|^veth|^docker|^br-/)\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({r with _value: r._value * 8.0}))\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bytes_recv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Приём"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bytes_sent"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Передача"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Трафик с момента запуска",
+      "description": "Сколько данных принято и отправлено через сетевые интерфейсы с момента загрузки ОС. Плагин net, поля bytes_recv и bytes_sent (последнее значение, сумма по интерфейсам). Единица: байты.",
+      "id": 25,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 44,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"net\" and (r._field == \"bytes_recv\" or r._field == \"bytes_sent\"))\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> filter(fn: (r) => r.interface !~ /(?i)loopback|isatap|teredo|tun|^lo$|^veth|^docker|^br-/)\n  |> last()\n  |> group(columns: [\"_field\"])\n  |> sum()\n  |> map(fn: (r) => ({_field: if r._field == \"bytes_recv\" then \"Принято\" else \"Отправлено\", _value: r._value}))\n  |> pivot(rowKey: [], columnKey: [\"_field\"], valueColumn: \"_value\")"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decbytes",
+          "decimals": 1,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "dark-blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true,
+        "showPercentChange": false
+      }
+    },
+    {
+      "type": "row",
+      "title": "Процессы и службы",
+      "id": 26,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Процессы и потоки во времени",
+      "description": "Изменение числа процессов (левая ось) и потоков (правая ось). Windows — счётчики System\\Processes и System\\Threads, Linux — плагин processes. Единица: штуки.",
+      "id": 27,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"processes\" and (r._field == \"total\" or r._field == \"total_threads\"))\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "showPoints": "never",
+            "spanNulls": true,
+            "axisPlacement": "auto",
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Процессы"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "total_threads"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Потоки"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Состояние служб Windows",
+      "description": "Состояние отслеживаемых служб Windows (плагин win_services, поле state): 4 — выполняется, 1 — остановлена. Единица: код состояния, показан словами.",
+      "id": 28,
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb-pr9"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 53,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb-pr9"
+          },
+          "query": "from(bucket: \"Metrix\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"win_services\" and r._field == \"state\")\n  |> filter(fn: (r) => r.host == \"${host}\")\n  |> last()\n  |> map(fn: (r) => ({\"Служба\": r.service_name, \"Название\": r.display_name, \"Состояние\": r._value}))\n  |> group()\n  |> sort(columns: [\"Служба\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Состояние"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Остановлена",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "2": {
+                        "text": "Запускается",
+                        "color": "yellow",
+                        "index": 1
+                      },
+                      "3": {
+                        "text": "Останавливается",
+                        "color": "yellow",
+                        "index": 2
+                      },
+                      "4": {
+                        "text": "Выполняется",
+                        "color": "green",
+                        "index": 3
+                      },
+                      "7": {
+                        "text": "Приостановлена",
+                        "color": "orange",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    }
+  ]
+}

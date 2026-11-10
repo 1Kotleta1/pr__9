@@ -1,0 +1,90 @@
+# ПР №9 — Telegraf + InfluxDB + Grafana в Docker
+#
+#   docker compose up -d                       # InfluxDB + Grafana (любой ПК)
+#   docker compose --profile linux up -d       # + Telegraf в контейнере (ПК с Linux)
+#
+# На ПК с Windows/macOS контейнер видит не сам компьютер, а виртуальную машину
+# Docker Desktop, поэтому Telegraf там запускается не в Docker, а штатно
+# (telegraf.exe + windows/telegraf/telegraf.conf) — см. README.md.
+
+name: pr9-monitoring
+
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: pr9-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup          # первичная настройка при первом запуске
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USER}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET}
+      DOCKER_INFLUXDB_INIT_RETENTION: 30d
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN}
+      TZ: ${TZ}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  grafana:
+    image: grafana/grafana:13.3.0
+    container_name: pr9-grafana
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      INFLUX_URL: http://influxdb:8086           # имя сервиса в сети compose
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      DASHBOARDS_DIR: /etc/grafana/dashboards
+      TZ: ${TZ}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+
+  # Telegraf в контейнере читает метрики ХОСТА через смонтированный корень "/"
+  # (переменные HOST_*). Имеет смысл только на ПК с Linux.
+  telegraf:
+    image: telegraf:1.40
+    container_name: pr9-telegraf
+    profiles: ["linux"]
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    network_mode: host        # реальные сетевые интерфейсы и настоящее имя хоста
+    pid: host                 # реальный список процессов
+    user: root
+    environment:
+      HOST_ETC: /hostfs/etc
+      HOST_PROC: /hostfs/proc
+      HOST_SYS: /hostfs/sys
+      HOST_VAR: /hostfs/var
+      HOST_RUN: /hostfs/run
+      HOST_MOUNT_PREFIX: /hostfs
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      TZ: ${TZ}
+    volumes:
+      - ./docker/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./docker/telegraf/device_info.sh:/etc/telegraf/device_info.sh:ro
+      - /:/hostfs:ro
+
+volumes:
+  influxdb_data:
+  influxdb_config:
+  grafana_data:
